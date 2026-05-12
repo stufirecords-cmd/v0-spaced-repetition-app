@@ -55,7 +55,9 @@ export function useCards() {
   }, [])
 
   useEffect(() => {
-    if (hydrated && userId) {
+    if (!hydrated) return
+    
+    if (userId) {
       // Save to Supabase
       const saveToSupabase = async () => {
         const supabase = createClient()
@@ -74,11 +76,11 @@ export function useCards() {
               next_revision_date: card.nextRevisionDate,
               revision_history: card.revisionHistory,
               source: card.source,
-            })
+            }, { onConflict: 'id' })
         }
       }
-      saveToSupabase()
-    } else if (hydrated) {
+      saveToSupabase().catch(console.error)
+    } else {
       // Fallback to localStorage
       saveCards(cards)
     }
