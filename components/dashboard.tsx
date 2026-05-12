@@ -5,9 +5,12 @@ import { Brain, Filter, Search, SlidersHorizontal } from "lucide-react"
 import { toast } from "sonner"
 import type { Difficulty, QuestionCard } from "@/lib/types"
 import { useCards } from "@/hooks/use-cards"
+import { useLeetcodeSync } from "@/hooks/use-leetcode-sync"
 import { daysUntil, isDue } from "@/lib/srs"
 import { AddCardDialog } from "./add-card-dialog"
 import { CardRow } from "./card-row"
+import { LeetcodeImportDialog } from "./leetcode-import-dialog"
+import { LeetcodeSyncCard } from "./leetcode-sync-card"
 import { ReviseDialog } from "./revise-dialog"
 import { ReviewSession } from "./review-session"
 import { SettingsDialog } from "./settings-dialog"
@@ -35,6 +38,7 @@ export function Dashboard() {
     setSettings,
     hydrated,
     addCard,
+    addCardsBulk,
     recordRevision,
     postponeCard,
     postponeMany,
@@ -46,6 +50,26 @@ export function Dashboard() {
   const [difficulty, setDifficulty] = useState<Difficulty | "All">("All")
   const [tag, setTag] = useState<string>("All")
   const [search, setSearch] = useState("")
+  const [importOpen, setImportOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // LeetCode sync — only runs when a username is set.
+  const lc = useLeetcodeSync(
+    hydrated ? settings.leetcodeUsername : undefined,
+    settings.leetcodeAutoSync,
+  )
+
+  // Pending = solves we haven't already imported as cards.
+  const importedSlugs = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of cards) if (c.source?.slug) set.add(c.source.slug)
+    return set
+  }, [cards])
+
+  const pendingSolves = useMemo(
+    () => lc.solves.filter((s) => !importedSlugs.has(s.slug)),
+    [lc.solves, importedSlugs],
+  )
 
   const allTags = useMemo(() => {
     const s = new Set<string>()
@@ -95,6 +119,26 @@ export function Dashboard() {
     toast.success(`${ids.length} cards pushed to tomorrow`)
   }
 
+  const handleImportFromLeetcode = (
+    chosen: { slug: string; title: string; url: string; difficulty: Difficulty; tags: string[]; solvedAt: string }[],
+  ) => {
+    if (chosen.length === 0) return
+    const count = addCardsBulk(
+      chosen.map((s) => ({
+        title: s.title,
+        url: s.url,
+        difficulty: s.difficulty,
+        tags: s.tags,
+        source: { provider: "leetcode", slug: s.slug, solvedAt: s.solvedAt },
+      })),
+    )
+    if (count > 0) {
+      toast.success(`Imported ${count} card${count === 1 ? "" : "s"} from LeetCode`)
+    } else {
+      toast.info("Nothing new to import")
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-10">
       {/* Header */}
@@ -111,13 +155,33 @@ export function Dashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <SettingsDialog settings={settings} onChange={setSettings} />
+          <SettingsDialog
+            settings={settings}
+            onChange={setSettings}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+          />
           <AddCardDialog onAdd={addCard} />
         </div>
       </header>
 
       {/* Stats */}
       <StatsHeader cards={cards} />
+
+      {/* LeetCode sync — shown when user hydrated. Promo state when no username. */}
+      {hydrated && (
+        <LeetcodeSyncCard
+          username={settings.leetcodeUsername}
+          autoSync={settings.leetcodeAutoSync}
+          syncing={lc.syncing}
+          lastSyncedAt={lc.lastSyncedAt}
+          error={lc.error}
+          pendingCount={pendingSolves.length}
+          onSyncNow={lc.syncNow}
+          onReview={() => setImportOpen(true)}
+          onConfigure={() => setSettingsOpen(true)}
+        />
+      )}
 
       {/* Today's prioritized queue */}
       {hydrated && cards.length > 0 && (
@@ -278,6 +342,13 @@ export function Dashboard() {
         onOpenChange={(o) => !o && setSessionIds(null)}
         queue={sessionQueue}
         onRevise={(id, confidence) => recordRevision(id, confidence)}
+      />
+
+      <LeetcodeImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        pending={pendingSolves}
+        onImport={handleImportFromLeetcode}
       />
     </div>
   )

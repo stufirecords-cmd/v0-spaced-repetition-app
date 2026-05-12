@@ -59,6 +59,47 @@ export function useCards() {
     [],
   )
 
+  /**
+   * Adds many cards at once, deduping by source slug. Returns the number of
+   * cards actually inserted.
+   */
+  const addCardsBulk = useCallback(
+    (
+      inputs: Array<{
+        title: string
+        url: string
+        difficulty: Difficulty
+        tags: string[]
+        source?: QuestionCard["source"]
+      }>,
+    ): number => {
+      let inserted = 0
+      setCards((prev) => {
+        const existingSlugs = new Set(
+          prev.map((c) => c.source?.slug).filter((s): s is string => !!s),
+        )
+        const toAdd: QuestionCard[] = []
+        for (const input of inputs) {
+          if (input.source?.slug && existingSlugs.has(input.source.slug)) continue
+          if (input.source?.slug) existingSlugs.add(input.source.slug)
+          toAdd.push({
+            id: uuid(),
+            title: input.title.trim(),
+            url: input.url.trim(),
+            difficulty: input.difficulty,
+            tags: input.tags,
+            source: input.source,
+            ...newCardDefaults(),
+          })
+        }
+        inserted = toAdd.length
+        return [...toAdd, ...prev]
+      })
+      return inserted
+    },
+    [],
+  )
+
   const recordRevision = useCallback(
     (id: string, confidence: number) => {
       setCards((prev) => {
@@ -119,6 +160,7 @@ export function useCards() {
     setSettings,
     hydrated,
     addCard,
+    addCardsBulk,
     recordRevision,
     postponeCard,
     postponeMany,
