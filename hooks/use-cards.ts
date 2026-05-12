@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { format } from "date-fns"
+import { createClient } from "@/lib/supabase/client"
 import type { Difficulty, QuestionCard, Settings } from "@/lib/types"
 import { DEFAULT_SETTINGS } from "@/lib/types"
 import { loadCards, saveCards, loadSettings, saveSettings } from "@/lib/storage"
@@ -23,16 +24,65 @@ export function useCards() {
   const [cards, setCards] = useState<QuestionCard[]>([])
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [hydrated, setHydrated] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    setCards(loadCards())
-    setSettings(loadSettings())
-    setHydrated(true)
+    const loadData = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        setUserId(user.id)
+        // Load from Supabase
+        const { data: questions } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('user_id', user.id)
+        
+        if (questions) {
+          setCards(questions as QuestionCard[])
+        }
+      } else {
+        // Load from localStorage as fallback
+        setCards(loadCards())
+      }
+      
+      setSettings(loadSettings())
+      setHydrated(true)
+    }
+    
+    loadData()
   }, [])
 
   useEffect(() => {
-    if (hydrated) saveCards(cards)
-  }, [cards, hydrated])
+    if (hydrated && userId) {
+      // Save to Supabase
+      const saveToSupabase = async () => {
+        const supabase = createClient()
+        for (const card of cards) {
+          await supabase
+            .from('questions')
+            .upsert({
+              id: card.id,
+              user_id: userId,
+              title: card.title,
+              url: card.url,
+              difficulty: card.difficulty,
+              tags: card.tags,
+              stability_score: card.stabilityScore,
+              interval_days: card.intervalDays,
+              next_revision_date: card.nextRevisionDate,
+              revision_history: card.revisionHistory,
+              source: card.source,
+            })
+        }
+      }
+      saveToSupabase()
+    } else if (hydrated) {
+      // Fallback to localStorage
+      saveCards(cards)
+    }
+  }, [cards, hydrated, userId])
 
   useEffect(() => {
     if (hydrated) saveSettings(settings)
