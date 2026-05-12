@@ -106,13 +106,15 @@ export function LearningCurveChart({ card }: Props) {
               color: "var(--popover-foreground)",
             }}
             labelFormatter={(d) => format(parseISO(d as string), "EEE, MMM d")}
-            formatter={(value: number | null, name: string) => {
-              if (value == null) return [null, null]
-              if (name === "Retention" || name === "Projected retention")
-                return [`${Math.round(value)}%`, name]
-              if (name === "Confidence")
-                return [`${Math.round(value / 20)}/5`, name]
-              return [value, name]
+            formatter={(value, name) => {
+              if (value == null) return ["", ""]
+              const num = typeof value === "number" ? value : Number(value)
+              const label = String(name)
+              if (label === "Retention" || label === "Projected retention")
+                return [`${Math.round(num)}%`, label]
+              if (label === "Confidence")
+                return [`${Math.round(num / 20)}/5`, label]
+              return [String(value), label]
             }}
           />
 
