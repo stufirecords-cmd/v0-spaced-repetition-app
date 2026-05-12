@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Brain, Filter, Search, SlidersHorizontal } from "lucide-react"
+import { Brain, Filter, Search, SlidersHorizontal, Users } from "lucide-react"
 import { toast } from "sonner"
 import type { Difficulty, QuestionCard } from "@/lib/types"
 import { useCards } from "@/hooks/use-cards"
@@ -18,6 +18,7 @@ import { StatsHeader } from "./stats-header"
 import { TodayQueue } from "./today-queue"
 import { UpcomingRevisions } from "./upcoming-revisions"
 import { WorkloadForecast } from "./workload-forecast"
+import { UserProfile } from "./user-profile"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 type Filter = "due" | "all" | "upcoming"
 
@@ -155,6 +157,12 @@ export function Dashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/users">
+            <Button variant="ghost" size="sm" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Users
+            </Button>
+          </Link>
           <SettingsDialog
             settings={settings}
             onChange={setSettings}
@@ -162,6 +170,7 @@ export function Dashboard() {
             onOpenChange={setSettingsOpen}
           />
           <AddCardDialog onAdd={addCard} />
+          <UserProfile />
         </div>
       </header>
 
