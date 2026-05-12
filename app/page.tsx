@@ -10,16 +10,29 @@ export default function Page() {
   const router = useRouter()
 
   useEffect(() => {
+    // Check if the URL has error params from Supabase email link (expired OTP, etc.)
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      const search = window.location.search
+      
+      if (hash.includes('error') || search.includes('error')) {
+        console.log("[v0] Auth error in URL, redirecting to login")
+        // Clear the URL params and redirect to login
+        window.history.replaceState({}, '', '/')
+        router.push('/auth/login')
+        return
+      }
+    }
+
     const checkAuth = async () => {
       try {
         const supabase = createClient()
-        const { data: { user }, error } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase.auth.getUser()
         
         if (user) {
           setIsLoggedIn(true)
         } else {
           setIsLoggedIn(false)
-          // Redirect to login
           router.push('/auth/login')
         }
       } catch (err) {
