@@ -61,25 +61,34 @@ export function useCards() {
       // Save to Supabase
       const saveToSupabase = async () => {
         const supabase = createClient()
-        for (const card of cards) {
-          await supabase
-            .from('questions')
-            .upsert({
-              id: card.id,
-              user_id: userId,
-              title: card.title,
-              url: card.url,
-              difficulty: card.difficulty,
-              tags: card.tags,
-              stability_score: card.stabilityScore,
-              interval_days: card.intervalDays,
-              next_revision_date: card.nextRevisionDate,
-              revision_history: card.revisionHistory,
-              source: card.source,
-            }, { onConflict: 'id' })
+        try {
+          for (const card of cards) {
+            const { error } = await supabase
+              .from('questions')
+              .upsert({
+                id: card.id,
+                user_id: userId,
+                title: card.title,
+                url: card.url,
+                difficulty: card.difficulty,
+                tags: card.tags,
+                stability_score: card.stabilityScore,
+                interval_days: card.intervalDays,
+                next_revision_date: card.nextRevisionDate,
+                revision_history: card.revisionHistory,
+                source: card.source,
+              })
+            if (error) {
+              console.log("[v0] Supabase save error:", error)
+            }
+          }
+        } catch (err) {
+          console.log("[v0] Supabase save exception:", err)
         }
       }
-      saveToSupabase().catch(console.error)
+      // Debounce saves to avoid too many requests
+      const timer = setTimeout(saveToSupabase, 1000)
+      return () => clearTimeout(timer)
     } else {
       // Fallback to localStorage
       saveCards(cards)
@@ -204,7 +213,24 @@ export function useCards() {
 
   const deleteCard = useCallback((id: string) => {
     setCards((prev) => prev.filter((c) => c.id !== id))
-  }, [])
+    
+    // Delete from Supabase
+    if (userId) {
+      const deleteFromSupabase = async () => {
+        const supabase = createClient()
+        const { error } = await supabase
+          .from('questions')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId)
+        
+        if (error) {
+          console.log("[v0] Delete error:", error)
+        }
+      }
+      deleteFromSupabase().catch(console.error)
+    }
+  }, [userId])
 
   return {
     cards,
