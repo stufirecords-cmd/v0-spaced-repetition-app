@@ -9,6 +9,7 @@ import { AddCardDialog } from "./add-card-dialog"
 import { CardRow } from "./card-row"
 import { ReviseDialog } from "./revise-dialog"
 import { StatsHeader } from "./stats-header"
+import { UpcomingRevisions } from "./upcoming-revisions"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -85,6 +86,14 @@ export function Dashboard() {
 
       {/* Stats */}
       <StatsHeader cards={cards} />
+
+      {/* Upcoming revisions timeline */}
+      {hydrated && cards.length > 0 && (
+        <UpcomingRevisions
+          cards={cards}
+          onRevise={(id) => setReviseId(id)}
+        />
+      )}
 
       {/* Filter tabs */}
       <div className="mt-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
