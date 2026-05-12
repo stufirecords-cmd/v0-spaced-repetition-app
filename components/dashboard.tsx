@@ -2,14 +2,19 @@
 
 import { useMemo, useState } from "react"
 import { Brain, Filter, Search, SlidersHorizontal } from "lucide-react"
+import { toast } from "sonner"
 import type { Difficulty, QuestionCard } from "@/lib/types"
 import { useCards } from "@/hooks/use-cards"
 import { daysUntil, isDue } from "@/lib/srs"
 import { AddCardDialog } from "./add-card-dialog"
 import { CardRow } from "./card-row"
 import { ReviseDialog } from "./revise-dialog"
+import { ReviewSession } from "./review-session"
+import { SettingsDialog } from "./settings-dialog"
 import { StatsHeader } from "./stats-header"
+import { TodayQueue } from "./today-queue"
 import { UpcomingRevisions } from "./upcoming-revisions"
+import { WorkloadForecast } from "./workload-forecast"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -24,8 +29,19 @@ import { cn } from "@/lib/utils"
 type Filter = "due" | "all" | "upcoming"
 
 export function Dashboard() {
-  const { cards, hydrated, addCard, recordRevision, deleteCard } = useCards()
+  const {
+    cards,
+    settings,
+    setSettings,
+    hydrated,
+    addCard,
+    recordRevision,
+    postponeCard,
+    postponeMany,
+    deleteCard,
+  } = useCards()
   const [reviseId, setReviseId] = useState<string | null>(null)
+  const [sessionIds, setSessionIds] = useState<string[] | null>(null)
   const [filter, setFilter] = useState<Filter>("due")
   const [difficulty, setDifficulty] = useState<Difficulty | "All">("All")
   const [tag, setTag] = useState<string>("All")
@@ -52,7 +68,6 @@ export function Dashboard() {
           c.tags.some((t) => t.toLowerCase().includes(q)),
       )
     }
-    // Sort: due first (by overdue amount), then by nextRevisionDate
     list.sort((a, b) => daysUntil(a.nextRevisionDate) - daysUntil(b.nextRevisionDate))
     return list
   }, [cards, filter, difficulty, tag, search])
@@ -62,7 +77,23 @@ export function Dashboard() {
     [cards, reviseId],
   )
 
+  const sessionQueue: QuestionCard[] = useMemo(() => {
+    if (!sessionIds) return []
+    const lookup = new Map(cards.map((c) => [c.id, c]))
+    return sessionIds.map((id) => lookup.get(id)).filter(Boolean) as QuestionCard[]
+  }, [sessionIds, cards])
+
   const dueCount = cards.filter((c) => isDue(c)).length
+
+  const handlePostpone = (id: string) => {
+    postponeCard(id)
+    toast.success("Pushed to tomorrow")
+  }
+
+  const handlePostponeAll = (ids: string[]) => {
+    postponeMany(ids)
+    toast.success(`${ids.length} cards pushed to tomorrow`)
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-10">
@@ -80,6 +111,7 @@ export function Dashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <SettingsDialog settings={settings} onChange={setSettings} />
           <AddCardDialog onAdd={addCard} />
         </div>
       </header>
@@ -87,12 +119,26 @@ export function Dashboard() {
       {/* Stats */}
       <StatsHeader cards={cards} />
 
+      {/* Today's prioritized queue */}
+      {hydrated && cards.length > 0 && (
+        <TodayQueue
+          cards={cards}
+          settings={settings}
+          onRevise={(id) => setReviseId(id)}
+          onStartSession={(ids) => setSessionIds(ids)}
+          onPostpone={handlePostpone}
+          onPostponeAll={handlePostponeAll}
+        />
+      )}
+
+      {/* Workload forecast */}
+      {hydrated && cards.length > 0 && (
+        <WorkloadForecast cards={cards} settings={settings} />
+      )}
+
       {/* Upcoming revisions timeline */}
       {hydrated && cards.length > 0 && (
-        <UpcomingRevisions
-          cards={cards}
-          onRevise={(id) => setReviseId(id)}
-        />
+        <UpcomingRevisions cards={cards} onRevise={(id) => setReviseId(id)} />
       )}
 
       {/* Filter tabs */}
@@ -225,6 +271,13 @@ export function Dashboard() {
         onSubmit={(c) => {
           if (reviseTarget) recordRevision(reviseTarget.id, c)
         }}
+      />
+
+      <ReviewSession
+        open={!!sessionIds}
+        onOpenChange={(o) => !o && setSessionIds(null)}
+        queue={sessionQueue}
+        onRevise={(id, confidence) => recordRevision(id, confidence)}
       />
     </div>
   )

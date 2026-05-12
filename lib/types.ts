@@ -17,3 +17,30 @@ export type QuestionCard = {
   nextRevisionDate: string // ISO date
   revisionHistory: RevisionEntry[]
 }
+
+/**
+ * User-tunable scheduler settings. Backed by science:
+ *
+ * - dailyReviewCap: cognitive limit on reviews/day. Excess cards get
+ *   auto-postponed if their retention is still safe. Default 15 — research
+ *   suggests 15-25 mature reviews/day is a sustainable load for most learners.
+ *
+ * - targetRetention: the retention probability at which a card is "due".
+ *   Anki/FSRS recommends 85-95%. Lower = fewer reviews but more forgetting.
+ *   Higher = more reviews but stronger memory. Default 90%.
+ *
+ * - loadBalance: when scheduling next review, look at a ±15% window around
+ *   the ideal date and pick the day with the fewest existing reviews. This
+ *   naturally spreads "burst days" without hurting retention.
+ */
+export type Settings = {
+  dailyReviewCap: number
+  targetRetention: number // 0.80 - 0.95
+  loadBalance: boolean
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  dailyReviewCap: 15,
+  targetRetention: 0.9,
+  loadBalance: true,
+}

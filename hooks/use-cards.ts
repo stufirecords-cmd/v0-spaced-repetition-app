@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { format } from "date-fns"
-import type { Difficulty, QuestionCard } from "@/lib/types"
-import { loadCards, saveCards } from "@/lib/storage"
-import { computeNextRevision, newCardDefaults } from "@/lib/srs"
+import type { Difficulty, QuestionCard, Settings } from "@/lib/types"
+import { DEFAULT_SETTINGS } from "@/lib/types"
+import { loadCards, saveCards, loadSettings, saveSettings } from "@/lib/storage"
+import {
+  buildScheduleLoad,
+  computeNextRevision,
+  newCardDefaults,
+  postponeOneDay,
+} from "@/lib/srs"
 
 function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -15,16 +21,22 @@ function uuid(): string {
 
 export function useCards() {
   const [cards, setCards] = useState<QuestionCard[]>([])
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     setCards(loadCards())
+    setSettings(loadSettings())
     setHydrated(true)
   }, [])
 
   useEffect(() => {
     if (hydrated) saveCards(cards)
   }, [cards, hydrated])
+
+  useEffect(() => {
+    if (hydrated) saveSettings(settings)
+  }, [settings, hydrated])
 
   const addCard = useCallback(
     (input: {
@@ -47,22 +59,52 @@ export function useCards() {
     [],
   )
 
-  const recordRevision = useCallback((id: string, confidence: number) => {
+  const recordRevision = useCallback(
+    (id: string, confidence: number) => {
+      setCards((prev) => {
+        // Build load map from OTHER cards so this card doesn't see itself.
+        const scheduleLoad = buildScheduleLoad(prev.filter((c) => c.id !== id))
+        return prev.map((c) => {
+          if (c.id !== id) return c
+          const now = new Date()
+          const next = computeNextRevision(c, confidence, {
+            now,
+            scheduleLoad,
+            settings,
+          })
+          return {
+            ...c,
+            revisionHistory: [
+              ...c.revisionHistory,
+              { date: format(now, "yyyy-MM-dd"), confidence },
+            ],
+            intervalDays: next.intervalDays,
+            stabilityScore: next.stabilityScore,
+            nextRevisionDate: next.nextRevisionDate,
+          }
+        })
+      })
+    },
+    [settings],
+  )
+
+  const postponeCard = useCallback((id: string) => {
     setCards((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c
-        const now = new Date()
-        const next = computeNextRevision(c, confidence, now)
-        return {
-          ...c,
-          revisionHistory: [
-            ...c.revisionHistory,
-            { date: format(now, "yyyy-MM-dd"), confidence },
-          ],
-          intervalDays: next.intervalDays,
-          stabilityScore: next.stabilityScore,
-          nextRevisionDate: next.nextRevisionDate,
-        }
+        const updated = postponeOneDay(c)
+        return { ...c, ...updated }
+      }),
+    )
+  }, [])
+
+  const postponeMany = useCallback((ids: string[]) => {
+    const idSet = new Set(ids)
+    setCards((prev) =>
+      prev.map((c) => {
+        if (!idSet.has(c.id)) return c
+        const updated = postponeOneDay(c)
+        return { ...c, ...updated }
       }),
     )
   }, [])
@@ -71,5 +113,15 @@ export function useCards() {
     setCards((prev) => prev.filter((c) => c.id !== id))
   }, [])
 
-  return { cards, hydrated, addCard, recordRevision, deleteCard }
+  return {
+    cards,
+    settings,
+    setSettings,
+    hydrated,
+    addCard,
+    recordRevision,
+    postponeCard,
+    postponeMany,
+    deleteCard,
+  }
 }
