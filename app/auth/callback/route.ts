@@ -10,9 +10,11 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      console.log("[v0] Auth successful, redirecting to:", next)
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
+  console.log("[v0] Auth failed, redirecting to error")
   return NextResponse.redirect(`${origin}/auth/error`)
 }

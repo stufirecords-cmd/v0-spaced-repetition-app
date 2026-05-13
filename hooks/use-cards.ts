@@ -24,16 +24,14 @@ export function useCards() {
   const [cards, setCards] = useState<QuestionCard[]>([])
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [hydrated, setHydrated] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       
+      // Load from Supabase if authenticated, otherwise localStorage
       if (user) {
-        setUserId(user.id)
-        // Load from Supabase
         const { data: questions } = await supabase
           .from('questions')
           .select('*')
@@ -43,7 +41,6 @@ export function useCards() {
           setCards(questions as QuestionCard[])
         }
       } else {
-        // Load from localStorage as fallback
         setCards(loadCards())
       }
       
@@ -55,19 +52,21 @@ export function useCards() {
   }, [])
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || cards.length === 0) return
     
-    if (userId) {
-      // Save to Supabase
-      const saveToSupabase = async () => {
-        const supabase = createClient()
+    // Save to Supabase if authenticated, otherwise localStorage
+    const saveToSupabase = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
         try {
           for (const card of cards) {
             const { error } = await supabase
               .from('questions')
               .upsert({
                 id: card.id,
-                user_id: userId,
+                user_id: user.id,
                 title: card.title,
                 url: card.url,
                 difficulty: card.difficulty,
@@ -85,15 +84,16 @@ export function useCards() {
         } catch (err) {
           console.log("[v0] Supabase save exception:", err)
         }
+      } else {
+        // Fallback to localStorage
+        saveCards(cards)
       }
-      // Debounce saves to avoid too many requests
-      const timer = setTimeout(saveToSupabase, 1000)
-      return () => clearTimeout(timer)
-    } else {
-      // Fallback to localStorage
-      saveCards(cards)
     }
-  }, [cards, hydrated, userId])
+    
+    // Debounce saves to avoid too many requests
+    const timer = setTimeout(saveToSupabase, 1000)
+    return () => clearTimeout(timer)
+  }, [cards, hydrated])
 
   useEffect(() => {
     if (hydrated) saveSettings(settings)
@@ -215,22 +215,24 @@ export function useCards() {
     setCards((prev) => prev.filter((c) => c.id !== id))
     
     // Delete from Supabase
-    if (userId) {
-      const deleteFromSupabase = async () => {
-        const supabase = createClient()
+    const deleteFromSupabase = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
         const { error } = await supabase
           .from('questions')
           .delete()
           .eq('id', id)
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
         
         if (error) {
           console.log("[v0] Delete error:", error)
         }
       }
-      deleteFromSupabase().catch(console.error)
     }
-  }, [userId])
+    deleteFromSupabase().catch(console.error)
+  }, [])
 
   return {
     cards,

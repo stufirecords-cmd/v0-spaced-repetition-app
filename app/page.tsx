@@ -6,27 +6,47 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
 export default function Page() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+    // Check if the URL has error params from Supabase email link (expired OTP, etc.)
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      const search = window.location.search
       
-      if (user) {
-        setIsLoggedIn(true)
-      } else {
+      if (hash.includes('error') || search.includes('error')) {
+        console.log("[v0] Auth error in URL, redirecting to login")
+        // Clear the URL params and redirect to login
+        window.history.replaceState({}, '', '/')
+        router.push('/auth/login')
+        return
+      }
+    }
+
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          setIsLoggedIn(true)
+        } else {
+          setIsLoggedIn(false)
+          router.push('/auth/login')
+        }
+      } catch (err) {
+        console.log("[v0] Auth check error:", err)
+        setIsLoggedIn(false)
         router.push('/auth/login')
       }
-      setIsLoading(false)
     }
 
     checkAuth()
   }, [router])
 
-  if (isLoading) {
+  // Show loading state while checking auth
+  if (isLoggedIn === null) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
