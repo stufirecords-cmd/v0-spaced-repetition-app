@@ -36,7 +36,7 @@ export default function Page() {
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -45,8 +45,23 @@ export default function Page() {
             `${window.location.origin}/auth/callback?next=/auth/login`,
         },
       })
-      if (error) throw error
-      router.push('/auth/sign-up-success')
+      
+      if (error) {
+        // Handle rate limit error specifically
+        if (error.message.includes('rate limit') || error.message.includes('email')) {
+          throw new Error('Email rate limit reached. Please wait an hour or try logging in if you already have an account.')
+        }
+        throw error
+      }
+      
+      // If session exists (email confirmation disabled), redirect to dashboard
+      if (data.session) {
+        console.log("[v0] Signup successful with session, redirecting to dashboard")
+        router.push('/')
+      } else {
+        // Email confirmation required
+        router.push('/auth/sign-up-success')
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
